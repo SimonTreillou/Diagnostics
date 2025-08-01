@@ -4,3 +4,5 @@
 *.avi
 *.nc
 *.pdf
+.DS_Store
+.idea
