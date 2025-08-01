@@ -1,6 +1,5 @@
 import numpy as np
 
-
 def skill_Willmott(mod,obs):
     # For reference, see Rijnsdorp et al. 2017
     mean_obs = np.mean(obs)
