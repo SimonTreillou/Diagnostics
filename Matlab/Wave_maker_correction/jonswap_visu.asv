@@ -1,0 +1,88 @@
+alpha=0.005;
+Nf=1125;
+gamma=2.0;
+T=6.7;
+[w,S]=jonswap_spectrum(alpha,Nf,T,gamma);
+Hs=sqrt(trapz(w,S)*16)
+plot(w,S);
+hold on
+S=S*180/pi; % RAD
+
+%% 
+
+wd=0*(pi/180);
+wds=30*(pi/180);
+%Ndir=200;
+
+Ndir=320;
+clear wa_bry_d;
+clear wd_bry;
+dmin=wd-90*(pi/180);
+dmax=wd+90*(pi/180);
+dd=(dmax-dmin)/Ndir;
+
+cff4=0;
+for i=1:Ndir
+    wdbryi=dmin+i*dd;
+    wd_bry(i)=wdbryi;
+    cff3=exp(-((wdbryi-wd)^2/(max(wds*1.5,1.e-12)^2)));%*1/(sqrt(pi)*wds);
+    wa_bry_d(i)=cff3;
+    %wa_bry_d2(i)=exp(-((wdbryi-wd)/max(wds,1.e-12))^2);
+    cff4=cff4+cff3;
+end
+
+for i=1:Ndir
+    wa_bry_d(i)=sqrt(wa_bry_d(i)/cff4);
+end
+%plot(wd_bry,wa_bry_d)
+plot(wd_bry*180/(pi),wa_bry_d)%*180/(pi))
+disp(trapz(wd_bry,wa_bry_d));
+hold on
+[theta,AG] = dirspread_salatin(wd,wds,Ndir,true);
+plot(theta*180/pi,AG);
+
+
+%% Plot 3D spectra 
+tes=S.*wa_bry_d';
+disp(trapz(trapz(S)))
+[X,Y]=meshgrid(w,wd_bry);
+h=surf(X,Y,tes);
+set(h,'EdgeColor','none');
+caxis([0, 0.3]);
+colorbar();
+xlim([0.05,0.25]);
+ylim([-pi/2,pi/2]);
+zlim([0. 0.3]);
+
+%%
+
+% 
+% wd=0*pi/180;
+% wds=30*pi/180;
+% Ndir=320;
+% Ns=20/wds;
+% kn=linspace(1,Ns,Ndir);
+% for i=1:length(wd_bry)
+%     A(i)=1/(2*pi) + 1/pi*sum(exp(-0.5.*(kn*wds).^2).*cos(kn.*(wd_bry(i)-wd)));
+% end
+% plot(wd_bry,A/sum(A))
+% 
+% dmin=wd-30*(2*pi/180);
+% dmax=wd+30*(2*pi/180);
+% Ndir=200;
+% wd_bry=linspace(dmin,dmax,Ndir);
+% wa_bry_d=exp(-((wd_bry-wd)/max(wds,1.e-12)).^2);
+% wa_bry_d=wa_bry_d/sum(wa_bry_d);
+% 
+% plot(wd_bry*180/(2*pi),wa_bry_d*180/(2*pi))
+
+% Testing one int{SPREAD}=1 for sure
+%SPREAD=(wd_bry./wd_bry)/(max(wd_bry)-min(wd_bry));
+
+S2=S.*wa_bry_d';
+
+% Integrals
+Fwout=trapz(w,S);
+disp("Without spreading: "+string(Fwout));
+Fwith=trapz(w,trapz(wd_bry,S2));
+disp("With spreading: "+string(Fwith));

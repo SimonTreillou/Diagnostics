@@ -1,0 +1,297 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Cross-shore significant wave height
+% Simon Treillou, 2023
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+clear all
+%close all
+%================== User defined parameters ===========================
+%
+% --- model params ---
+%
+%stname1 = '/Users/simon/Code/CONFIGS/BAKER_G2B/stations.nc';
+stname1 = '/Users/simon/Code/CONFIGS/BAKER_G1D/stations.nc';
+stname2 = '/Users/simon/Code/CONFIGS/BAKER_G2B_default/stations.nc';
+
+%% MODEL
+
+clear hs1 hs2 
+for i=1:2
+    if i==1
+        stname=stname1;
+    elseif i==2
+        stname=stname2;
+    end
+    nc=netcdf(stname,'r');
+    xpos=nc{'Xgrid'}(:);
+    ypos=nc{'Ygrid'}(:);
+    sta_crossshore=find(((ypos==150)));
+    %sta=find(((xpos==120)));
+    time=nc{'scrum_time'}(:);
+    [~,tstr]=min(abs(time<15*60));
+    [~,tend]=min(abs(time<25*60));
+
+    for j=1:length(sta_crossshore)
+        xpos=nc{'Xgrid'}(:);
+        sta=find((xpos==xpos(sta_crossshore(j))));
+
+        
+        % x-positions
+        xpos=nc{'Xgrid'}(:);
+        xpos=xpos(sta);
+        % y-positons
+        ypos=nc{'Ygrid'}(:);
+        ypos=ypos(sta);
+
+        tend=length(nc{'scrum_time'}(:));
+        zeta1=nc{'zeta'}(tstr:tend,:);
+        zeta1=zeta1(:,sta);
+        hs=4*std(zeta1);
+        mhs=mean(hs);
+        shs=std(hs);
+
+        [See,f,Seec] = pwelch(zeta1,WL*Hz,OL*Hz,[],1);
+        %[~,ixTp]=max(abs(See));
+        %Tpobs_off(i)=1/f(ixTp);
+        [~,f2]=min(abs(f-1.2));
+        [~,f1]=min(abs(f-0.25));
+        Hsobs_IS1(i)=4*sqrt(trapz(f(f1:f2),See(f1:f2)));
+        
+        if i==1
+            hs1(j)=mhs;
+            hs1_std(j)=shs;
+        elseif i==2;
+            hs2(j)=mhs;
+            hs2_std(j)=shs;
+        end
+    end
+    xpos=nc{'Xgrid'}(:);
+    ypos=nc{'Ygrid'}(:);
+    sta=find(ypos==150);
+    xpos=xpos(sta);
+
+end
+
+fname ='/Users/simon/Code/CONFIGS/BAKER_G1D/rip_his.nc';
+nc=netcdf(fname);
+h=nc{'h'}(1,:);
+x=nc{'x_rho'}(1,:);
+
+%% DATA
+
+
+TR="G1D";
+timeobs=0:1:(45*60)*100;
+[~,tinit]=min(abs(timeobs-15*60*100));
+[~,tend]=min(abs(timeobs-25*60*100));
+
+%%%%%%%%%%%%%%%%%%%%  OFFSHORE %%%%%%%%%%%%%%%%%%%% 
+repo="/Users/simon/Code/BAKER/G1D-IS/";
+vr='wg';
+WG = BAKER_read_data(repo,vr);
+
+for k=1:7
+    Xobs(k) = WG.("wg"+string(k)).x;
+    Yobs(k) = WG.("wg"+string(k)).y;
+    Zobs(k) = WG.("wg"+string(k)).z;
+    WGobs1(1:size(WG.wg1.data),k) = WG.("wg"+string(k)).data;
+end
+Xobs_off1 = mean(Xobs);
+
+for k=9:15
+    Xobs(k-8) = WG.("wg"+string(k)).x;
+    Yobs(k-8) = WG.("wg"+string(k)).y;
+    Zobs(k-8) = WG.("wg"+string(k)).z;
+    WGobs2(1:size(WG.wg1.data),k-8) = WG.("wg"+string(k)).data;
+end
+Xobs_off2 = mean(Xobs);
+
+Hz=100;
+WL=2^5;
+OL=2^4;
+
+for i=1:size(WGobs1,2)
+    [See,f,Seec] = pwelch(WGobs1(tinit:tend,i),WL*Hz,OL*Hz,[],Hz);
+    [~,ixTp]=max(abs(See));
+    %Tpobs_off(i)=1/f(ixTp);
+    Hsobs_off1(i)=4*sqrt(trapz(f,See));
+end
+Hsobs_off1_std=std(Hsobs_off1);
+Hsobs_off1=sum(Hsobs_off1)/length(Hsobs_off1);
+
+for i=1:size(WGobs2,2)
+    [See,f,Seec] = pwelch(WGobs2(tinit:tend,i),WL*Hz,OL*Hz,[],Hz);
+    [~,ixTp]=max(abs(See));
+    %Tpobs_off(i)=1/f(ixTp);
+    Hsobs_off2(i)=4*sqrt(trapz(f,See));
+end
+Hsobs_off2_std=std(Hsobs_off2);
+Hsobs_off2=sum(Hsobs_off2)/length(Hsobs_off2);
+
+
+%%%%%%%%%%%%%%%%%%%%  INNERSHELF %%%%%%%%%%%%%%%%%%%% 
+repo="/Users/simon/Code/BAKER/G1D-IS/";
+vr='press';
+PRESS = BAKER_read_data(repo,vr);
+
+
+PobsIS1 = [PRESS.press3.data];
+Xobs_IS1 = PRESS.press3.x;
+Zobs_IS1 = PRESS.press3.z;
+ini=5;
+clear PobsIS2 Xobs Yobs Zobs
+for k=ini:11
+    Xobs(k-ini+1) = PRESS.("press"+string(k)).x;
+    Yobs(k-ini+1) = PRESS.("press"+string(k)).y;
+    Zobs(k-ini+1) = PRESS.("press"+string(k)).z;
+    PobsIS2(1:size(PRESS.press1.data),k-ini+1) = PRESS.("press"+string(k)).data;
+end
+Xobs_IS2 = mean(Xobs);
+Zobs_IS2 = mean(Zobs);
+
+Hz = 100;
+maxfac = 1.2;
+[~,ix]=min(abs(x+15-Xobs_IS1));
+offset= Zobs_IS1 - (1.07-h(ix));
+Fs=100; 
+WL=32;
+OL=16;
+
+for i=1:size(PobsIS1,2)
+    eta=BAKER_press2eta(squeeze(PobsIS1(tinit:tend,i)),Fs,offset,maxfac);
+    [See,f,Seec] = pwelch(eta,WL*Hz,OL*Hz,[],Hz);
+    %[~,ixTp]=max(abs(See));
+    %Tpobs_off(i)=1/f(ixTp);
+    [~,f2]=min(abs(f-1.2));
+    [~,f1]=min(abs(f-0.25));
+    Hsobs_IS1(i)=4*sqrt(trapz(f(f1:f2),See(f1:f2)));
+    %Hsobs_IS1(i)=4*std(eta);
+end
+Hsobs_IS1_std=std(Hsobs_IS1);
+Hsobs_IS1=sum(Hsobs_IS1)/length(Hsobs_IS1)
+
+[~,ix]=min(abs(x+15-Xobs_IS2));
+offset = Zobs_IS2 - (1.07-h(ix));
+
+for i=1:size(PobsIS2,2)
+    eta=BAKER_press2eta(squeeze(PobsIS2(tinit:tend,i)),Fs,offset,maxfac);
+    [See,f,Seec] = pwelch(eta,WL*Hz,OL*Hz,[],Hz);
+    %[~,ixTp]=max(abs(See));
+    %Tpobs_off(i)=1/f(ixTp);
+    [~,f2]=min(abs(f-1.2));
+    [~,f1]=min(abs(f-0.25));
+    Hsobs_IS2(i)=4*sqrt(trapz(f(f1:f2),See(f1:f2)));
+    %Hsobs_IS1(i)=4*std(eta);
+end
+Hsobs_IS2_std=std(Hsobs_IS2);
+Hsobs_IS2=sum(Hsobs_IS2)/length(Hsobs_IS2);
+
+
+%%%%%%%%%%%%%%%%%%%%  SURFZONE %%%%%%%%%%%%%%%%%%%% 
+repo="/Users/simon/Code/BAKER/G1D-SZ/";
+vr='press';
+PRESS = BAKER_read_data(repo,vr);
+
+ini=1;
+clear PobsSZ1 Xobs Yobs Zobs
+for k=ini:8
+    Xobs(k-ini+1) = PRESS.("press"+string(k)).x;
+    Yobs(k-ini+1) = PRESS.("press"+string(k)).y;
+    Zobs(k-ini+1) = PRESS.("press"+string(k)).z;
+    PobsSZ1(1:size(PRESS.press1.data),k-ini+1) = PRESS.("press"+string(k)).data;
+end
+Xobs(4)=[];Zobs(4)=[];PobsSZ1(:,4)=[];
+Xobs_SZ1 = mean(Xobs);
+Zobs_SZ1 = mean(Zobs);
+
+ini=9;
+clear PobsSZ2 Xobs Yobs Zobs
+for k=ini:12
+    Xobs(k-ini+1) = PRESS.("press"+string(k)).x;
+    Yobs(k-ini+1) = PRESS.("press"+string(k)).y;
+    Zobs(k-ini+1) = PRESS.("press"+string(k)).z;
+    PobsSZ2(1:size(PRESS.press1.data),k-ini+1) = PRESS.("press"+string(k)).data;
+end
+Xobs_SZ2 = mean(Xobs);
+Zobs_SZ2 = mean(Zobs);
+
+[~,ix]=min(abs(x+15-Xobs_SZ1));
+offset = Zobs_SZ1 - (1.07-h(ix));
+
+for i=1:size(PobsSZ1,2)
+    eta=BAKER_press2eta(squeeze(PobsSZ1(tinit:tend,i)),Fs,offset,maxfac);
+    [See,f,Seec] = pwelch(eta,WL*Hz,OL*Hz,[],Hz);
+    %[~,ixTp]=max(abs(See));
+    %Tpobs_off(i)=1/f(ixTp);
+    [~,f2]=min(abs(f-1.2));
+    [~,f1]=min(abs(f-0.25));
+    Hsobs_SZ1(i)=4*sqrt(trapz(f,See));
+    %Hsobs_IS1(i)=4*std(eta);
+end
+Hsobs_SZ1_std=std(Hsobs_SZ1);
+Hsobs_SZ1=sum(Hsobs_SZ1)/length(Hsobs_SZ1);
+
+[~,ix]=min(abs(x+15-Xobs_SZ2));
+offset = Zobs_SZ2 - (1.07-h(ix));
+
+for i=1:size(PobsSZ2,2)
+    eta=BAKER_press2eta(squeeze(PobsSZ2(tinit:tend,i)),Fs,offset,maxfac);
+    [See,f,Seec] = pwelch(eta,WL*Hz,OL*Hz,[],Hz);
+    %[~,ixTp]=max(abs(See));
+    %Tpobs_off(i)=1/f(ixTp);
+    [~,f2]=min(abs(f-1.2));
+    [~,f1]=min(abs(f-0.25));
+    Hsobs_SZ2(i)=4*sqrt(trapz(f,See));
+    %Hsobs_SZ2(i)=4*std(eta);
+end
+Hsobs_SZ2_std=std(Hsobs_SZ2);
+Hsobs_SZ2=sum(Hsobs_SZ2)/length(Hsobs_SZ2);
+
+
+Hsobs=[Hsobs_off1 Hsobs_off2 Hsobs_IS1 Hsobs_IS2 Hsobs_SZ1 Hsobs_SZ2];
+Hsobs_std=[Hsobs_off1_std Hsobs_off2_std Hsobs_IS1_std Hsobs_IS2_std Hsobs_SZ1_std Hsobs_SZ2_std];
+Xobs=[Xobs_off1 Xobs_off2 Xobs_IS1 Xobs_IS2 Xobs_SZ1 Xobs_SZ2];
+
+
+%% PLOTTING
+
+load ./BAKER_G1D_Hs_Lidar
+load ./BAKER_G1D_Hs_InSitu
+
+
+figure('Position',[500 500 1400 500]);
+subplot(2,1,1);
+%errorbar(xpos/10+15,hs2,hs2_std,'LineWidth',1.5,'Color',[111,160,135,0.7*255]/255);
+hold on
+%plot(xpos/10+15,hs2,'LineWidth',3,'Color',[111,160,135,0.7*255]/255);
+%errorbar(xpos/10+15,hs1,hs1_std,'LineWidth',1.5,'Color',[192,24,135,0.7*255]/255);
+plot(xpos/10+15,hs2,'-*','LineWidth',3,'Color',[111,160,135,0.7*255]/255);
+plot(xpos/10+15,hs1,'-*','LineWidth',3,'Color',[192,24,135,0.7*255]/255);
+plot(Xobs,Hsobs,'*k','LineWidth',2);
+plot(BAKER_G1D_Hs_Lidar(:,1),BAKER_G1D_Hs_Lidar(:,2),'Color','r', ...
+    'LineStyle','-.','LineWidth',2);
+scatter(BAKER_G1D_Hs_InSitu(:,1),BAKER_G1D_Hs_InSitu(:,2),400,'.','Color','b');
+%errorbar(xpos/10+15,hs1,hs1_std,'LineWidth',1.5,'Color',[192,24,135,0.7*255]/255);
+%errorbar(xpos/10+15,Hsobs,Hsobs_std,'o','Color','k','MarkerFaceColor','k','LineWidth',1.5)
+legend('Default','Corrected','Moi','Lidar','In situ','Interpreter','latex','FontSize',15);
+%legend('Default','Corrected','In situ','Interpreter','latex','FontSize',15);
+grid("minor");
+ylim([0 0.35]);
+xlim([19 35]);
+%xlabel('$x (m)$','Interpreter','latex','FontSize',15);
+ylabel('$H_s$ $(m)$','Interpreter','latex','FontSize',15);
+
+subplot(2,1,2);
+load /Users/simon/Code/Matlab/Wave_maker_correction/BAKER_bathy
+plot(x+15,-h+1.07,'LineWidth',2,'Color','k');
+hold on
+plot(BAKER_bathy(:,1),BAKER_bathy(:,2),'LineWidth',1.5,'Color','red','LineStyle','--');
+plot(x+15,ones(size(x))*1.07,'LineStyle','--','LineWidth',1.5,'Color','k')
+ylim([-0.05 1.5]);
+xlim([19 35]);
+legend('CROCO bathy','Real bathy','Interpreter','latex','FontSize',15)
+xlabel('$x (m)$','Interpreter','latex','FontSize',15);
+ylabel('$z$ $(m)$','Interpreter','latex','FontSize',15);
+
+%print(gcf, '-dpdf','-bestfit', './Figures/Baker-hs_crossshore.pdf');

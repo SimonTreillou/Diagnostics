@@ -1,0 +1,100 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+clear all
+close all
+%================== User defined parameters ===========================
+%
+% --- model params ---
+%
+%fname     = '../rip_his.nc';  % CROCO file name
+%fname     = '../../../IB09_exp_Qnew_wind_periodic/rip_his.nc';
+dirpath    = '/Users/simon/Code/IB09/IB09PATdxbathynewang11strat10radiatif_newWM2023/';
+%dirpath    = '/Users/simon/Code/IB09/IB09_PSbienposT2/';
+%dirpath    = '/Users/simon/Code/CONFIGS/IB09_randomphase/';
+dirpath    = '/Users/simon/Code/CONFIGS/IB09_21AVR_S10/ ';   % croco history file name
+fname      = strcat(dirpath,'rip_avgtot.nc');
+model3D   = 1;
+
+makepdf   = 0;             % make pdf file
+Dcrit=0.2;
+%
+%======================================================================
+
+% ---------------------------------------------------------------------
+% --- get grid from numerical model ---
+% ---------------------------------------------------------------------
+
+nc=netcdf(fname);
+
+dx=3;
+
+tstr=1;
+tend=length(nc{'scrum_time'}(:));
+time=squeeze(nc{'scrum_time'}(:));
+time=time-time(1);
+if tend<tstr; tstr=1; end;
+
+h=nc{'h'}(:,:);
+beach_l = abs(min(h(1,:))/0.02); % 0.02 is beach slope (cf HR16)
+xl=nc{'xl'}(:);
+x=nc{'x_rho'}(1,:)-xl+beach_l;
+y=nc{'y_rho'}(:,:);
+pm=nc{'pm'}(:,:);
+pn=nc{'pn'}(:,:);
+N=length(nc('s_rho'));
+%x0=252;
+
+if model3D,
+  %u=squeeze(nc{'u'}(tstr:tend,N,:,:));
+  %v=squeeze(nc{'v'}(tstr:tend,N,:,:));
+  %ubar=squeeze(nc{'ubar'}(tstr:tend,:,:));
+  %vbar=squeeze(nc{'vbar'}(tstr:tend,:,:));
+  %t=squeeze(nc{'tpas01'}(:,:,:,:));
+  %zeta=squeeze(nc{'zeta'}(:,:,:));
+  %time=squeeze(nc{'scrum_time'}(:));
+else
+  ui=squeeze(nc{'ubar'}(1,:,:));
+  vi=squeeze(nc{'vbar'}(1,:,:));
+  mu=squeeze(mean(nc{'ubar'}(tstr:tend,:,:)));
+  mv=squeeze(mean(nc{'vbar'}(tstr:tend,:,:)));
+  u=nc{'ubar'}(tstr:tend,:,:);
+  v=nc{'vbar'}(tstr:tend,:,:);
+end
+
+%%
+tracinit=350;
+y=nc{'y_rho'}(tracinit:end,:)-nc{'y_rho'}(tracinit,1);
+indx=1:int16(tend/50):tend;
+[~,x0] = min(abs(x(1,:)));
+[~,xb] = min(abs(x(1,:)+81));
+[~,xb40] = min(abs(x(1,:)+(81+40)));
+t=squeeze(nc{'tpas01'}(indx,:,tracinit:end,xb40:xb));
+ymax = max(y(:,1));
+tinit = max(max(t(1,:,:)));
+load Data/HR16_fig6.mat;
+
+%%
+ymax_positions=[];
+for j=1:size(t,1)
+    tj = squeeze(sum(t(j,:,:,:)));
+    imaxtmp = 1
+    for i=1:size(t,3)
+        if sum(tj(i,:)>3)>0
+            imaxtmp=i;
+        end
+    end
+    ymax_positions(j)=y(imaxtmp,1);
+end
+
+%% Plotting
+
+plot(time(indx),ymax_positions);
+hold on
+scatter(HR16_fig6(:,1),HR16_fig6(:,2));
+plot(0:2e4,ones(length(0:2e4),1).*ymax,'LineStyle','--');
+ylabel('$y_p$ (m)','Interpreter','latex');
+legend('CROCO modeled','obs','Location','southeast')
+plot(time,0.1936*time,'LineStyle','--','Color','red')
+xlabel('$t$ (s)','Interpreter','latex');
+grid();
+txt = '$y_{max}$';
+text(1.85e4,ymax-50,txt,'Interpreter','latex');

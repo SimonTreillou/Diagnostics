@@ -1,0 +1,39 @@
+clear all
+%close all
+%================== User defined parameters ====================
+%
+% --- model params ---
+%
+fname1 = '/Users/simon/Code/IB09/IB09PATdxbathynewang11strat10radiatif_newWM2023/rip_avg_out.nc';
+fname2 = '/Users/simon/Code/CONFIGS/IB09_randomphase/rip_avgtot.nc';   % croco history file name
+
+makepdf   = 0;                       % make pdf file
+%
+%===============================================================
+model3D=1;
+
+for i=1:
+    if i==1
+        fname=fname1;
+    elseif i==2
+        fname=fname2;
+    end
+    nc=netcdf(fname);
+    tstr=5 ;
+    tend=length(nc{'scrum_time'}(:));
+    if tend<tstr; tstr=1;  end;
+    
+    xl=nc{'xl'}(:);
+    x=nc{'x_rho'}(:)-xl;
+   
+    v=nc{'vbar'}(tstr:tend,:,:);
+    
+    sigmaV=squeeze(std(v));
+    sigmaVint(i,:)=mean(sigmaV);
+end
+
+
+hold on
+for i=1:nbF
+    plot(x,sigmaVint(i,:));
+end

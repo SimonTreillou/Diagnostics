@@ -1,0 +1,149 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Alongshore significant wave height (for surfzone sensors)
+% Simon Treillou, 2023
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+clear all
+%close all
+%================== User defined parameters ===========================
+%
+% --- model params ---
+%
+stname1 = '/Users/simon/Code/CONFIGS/BAKER_G1D/stations.nc';
+stname2 = '/Users/simon/Code/CONFIGS/BAKER_G1D_default/stations.nc';
+
+tstr = 1*60;  % 15 minutes spin up
+zone = "inner";
+
+fname ='/Users/simon/Code/CONFIGS/BAKER_G1D/rip_his.nc';
+nc=netcdf(fname);
+h=nc{'h'}(1,:);
+x=nc{'x_rho'}(1,:);
+
+%% DATA 
+repo="/Users/simon/Code/BAKER/G1D-SZ/";
+vr='press';
+PRESS = BAKER_read_data(repo,vr);
+
+
+Hz = 100;
+maxfac = 1.2;
+Fs=100; 
+WL=32;
+OL=16;
+clear Hsobs
+
+if zone=="outer"
+    ini=1;
+    clear PobsSZ1 Xobs Yobs Zobs
+    for k=ini:8
+        Xobs(k-ini+1) = PRESS.("press"+string(k)).x;
+        Yobs(k-ini+1) = PRESS.("press"+string(k)).y;
+        Zobs(k-ini+1) = PRESS.("press"+string(k)).z;
+        PobsSZ1(1:size(PRESS.press1.data),k-ini+1) = PRESS.("press"+string(k)).data;
+    end
+    Xobs(4)=[];Yobs(4)=[];Zobs(4)=[];PobsSZ1(:,4)=[];
+    Xobs_SZ1 = mean(Xobs);
+    Zobs_SZ1 = mean(Zobs);
+
+    [~,ix]=min(abs(x+15-Xobs_SZ1));
+    offset = Zobs_SZ1 - (1.07-h(ix));
+    
+    for i=1:size(PobsSZ1,2)
+        eta=BAKER_press2eta(squeeze(PobsSZ1(tstr:end,i)),Fs,offset,maxfac);
+        [See,f,Seec] = pwelch(eta,WL*Hz,OL*Hz,[],Hz);
+        %[~,ixTp]=max(abs(See));
+        %Tpobs_off(i)=1/f(ixTp);
+        [~,f2]=min(abs(f-1.2));
+        [~,f1]=min(abs(f-0.25));
+        Hsobs(i)=4*sqrt(trapz(f,See));
+        %Hsobs_IS1(i)=4*std(eta);
+    end
+elseif zone=="inner"
+    ini=9;
+    clear PobsSZ2 Xobs Yobs Zobs
+    for k=ini:12
+        Xobs(k-ini+1) = PRESS.("press"+string(k)).x;
+        Yobs(k-ini+1) = PRESS.("press"+string(k)).y;
+        Zobs(k-ini+1) = PRESS.("press"+string(k)).z;
+        PobsSZ2(1:size(PRESS.press1.data),k-ini+1) = PRESS.("press"+string(k)).data;
+    end
+    Xobs = mean(Xobs);
+    Zobs = mean(Zobs);
+    
+    [~,ix]=min(abs(x+15-Xobs));
+    offset = Zobs - (1.07-h(ix));
+    
+    for i=1:size(PobsSZ2,2)
+        eta=BAKER_press2eta(squeeze(PobsSZ2(tstr:end,i)),Fs,offset,maxfac);
+        [See,f,Seec] = pwelch(eta,WL*Hz,OL*Hz,[],Hz);
+        %[~,ixTp]=max(abs(See));
+        %Tpobs_off(i)=1/f(ixTp);
+        [~,f2]=min(abs(f-1.2));
+        [~,f1]=min(abs(f-0.25));
+        Hsobs(i)=4*sqrt(trapz(f,See));
+    end
+end
+
+%% MODEL 
+for i=1:2
+    if i==1
+        stname=stname1;
+    elseif i==2
+        stname=stname2;
+    end
+    nc=netcdf(stname,'r');
+    xpos=nc{'Xgrid'}(:);
+    ypos=nc{'Ygrid'}(:);
+    if zone=="outer"
+        sta=find(((xpos==135)));
+    elseif zone=="inner"
+        sta=find(((xpos==135)));
+    end
+    % x-positions
+    xpos=nc{'Xgrid'}(:);
+    xpos=xpos(sta);
+    % y-positons
+    ypos=nc{'Ygrid'}(:);
+    ypos=ypos(sta);
+    tend=length(nc{'scrum_time'}(:));
+    zeta1=nc{'zeta'}(tstr:tend,:);
+    zeta1=zeta1(:,sta);
+    time=nc{'scrum_time'}(tstr:tend);
+    clear hs
+    for k=1:length(sta)
+        [S,f] = mycspd(zeta1(:,k),zeta1(:,k),64,10);
+        [~,f2]=min(abs(f-1.2));
+        [~,f1]=min(abs(f-0.25));
+        hs(k)=4*sqrt(trapz(f(f1:f2),S(f1:f2)));
+    end
+    %hs=4*std(zeta1);
+    if i==1
+        hs1=hs;
+    elseif i==2;
+        hs2=hs;
+    end
+end
+
+%% PLOTTING OFFSHORE ARRAY (X~27m)
+
+figure('Position',[500 500 1400 500]);
+plot(Yobs,Hsobs,'o','Color','k','LineWidth',2);
+hold on
+xlabel('$y (m)$','Interpreter','latex','FontSize',15);
+ylabel('$H_s$ $(m)$','Interpreter','latex','FontSize',15);
+grid("minor");
+ylim([0. 0.3])
+plot(ypos/10-15,hs2,'*-','LineWidth',3,'Color',[111,160,135,0.7*255]/255);
+plot(ypos/10-15,hs1,'*-','LineWidth',3,'Color',[192,24,135,0.7*255]/255);
+legend('Data','Default','Corrected', ...
+    'Interpreter','latex','FontSize',15,'Location','northwest');
+title("Surfzone ("+zone+")",'Interpreter','latex','FontSize',18);
+print(gcf, '-dpdf','-bestfit', './Figures/Baker-hs_'+zone+'surfzone.pdf');
+
+
+%%
+
+i=1:350;
+j=1

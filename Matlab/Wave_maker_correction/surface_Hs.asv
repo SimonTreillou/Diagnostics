@@ -1,0 +1,194 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Figure 3 from Hally-Rosendahl & Feddersen, 2016
+% Significant wave height Hs and alongshore average velocity V
+% Simon Treillou, 2022
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+clear all
+close all
+%================== User defined parameters ===========================
+%
+% --- model params ---
+%
+%dirpath    = '/Users/simon/Code/IB09/b3_i016_w85_s30_ang7_a023/';
+%dirpath    = '/Users/simon/Code/IB09/IB09PATPSdx1bathynewang11strat10radiatif_newWM/';
+%dirpath    = '/Users/simon/Code/IB09/testVADVC2periodok/';
+dirpath    = '/Users/simon/Code/CONFIGS/IB09_randomphase_S30/';
+dirpath    = '/Users/simon/Code/CONFIGS/IB09_21AVR_S10/';
+dirpath    = '/Users/simon/Code/CONFIGS/testLD_corr_testforper/';
+%dirpath = '/Users/simon/Code/CONFIGS/IB09_21AVR_spinup/';
+%dirpath = '/Users/simon/Code/CONFIGS/testWMPlanRPamel/';
+%dirpath = '/Users/simon/Code/CONFIGS/testWMPlanMine/';
+dirpath = '/Users/simon/Code/CONFIGS/WM-Default-S10/';
+dirpath = '/Users/simon/Code/CONFIGS/WM-Corrected-S10/';
+%dirpath    = '/Users/simon/Code/CONFIGS/CALMIP/IB09_dx2_ang7_spread10_init016_trc500/';
+%dirpath    = '/Users/simon/Code/IB09/IB09PATdx12/';
+fname      = strcat(dirpath,'rip_avg.nc');
+dianame    = strcat(dirpath,'rip_diags_eddy_avg.nc');
+hname      = strcat(dirpath,'rip_his.nc');
+model3D   = 1;
+
+Dcrit=0.2;
+%
+%======================================================================
+%%
+% ---------------------------------------------------------------------
+% --- get grid from numerical model ---
+% ---------------------------------------------------------------------
+
+nc=netcdf(fname,'r');
+ncd=netcdf(dianame,'r');
+isHs = 1;
+if isempty(ncd); isdiag=false; end
+nch=netcdf(hname,'r');
+
+tstr=1;
+time=squeeze(nc{'scrum_time'}(:));
+tend=length(time);
+%tend=300;
+if tend<tstr; tstr=1; end;
+
+% horizontal grid
+yr=squeeze(nc{'y_rho'}(:,:));
+[dyr,yindex] = min(abs(yr(:,1)-28));
+hr=squeeze(nc{'h'}(yindex,:));
+xr=squeeze(nc{'x_rho'}(yindex,:));
+xu=0.5*(xr(1:end-1)+xr(2:end));
+L=length(hr);
+xl=nc{'xl'}(:);
+y=nc{'y_rho'}(:,:);
+pm=nc{'pm'}(:,:);
+pn=nc{'pn'}(:,:);
+dx=unique(pm);
+dy=unique(pn);
+
+%
+% vertical grid
+h=hr;
+beach_l = 50;
+x=xr-xl+beach_l;
+xu=xu-xl+beach_l;
+h0=hr;
+N=length(nc('s_rho'));
+theta_s=nc.theta_s(:); 
+theta_b=nc.theta_b(:); 
+hc=nc.hc(:); 
+zeta=squeeze(nc{'zeta'}(tend,yindex,:));
+Dcrit=nc{'Dcrit'}(:)*1.0;
+Dcrit=0.2;
+zeta(h<Dcrit)=zeta(h<Dcrit)-h(h<Dcrit); % add land topo
+zr=squeeze(zlevs(h,zeta,theta_s,theta_b,hc,N,'r',2));
+zw=squeeze(zlevs(h,zeta,theta_s,theta_b,hc,N,'w',2));
+zru=0.5*(zr(:,1:end-1)+zr(:,2:end));
+zwu=0.5*(zw(:,1:end-1)+zw(:,2:end));
+dz1=zr(1,:)-zw(1,:);
+dzu1=zru(1,:)-zwu(1,:);
+dzu3=zru(3,:)-zwu(1,:);
+%
+xr2d=repmat(xr,[N 1]);
+xu2d=repmat(xu,[N 1]);
+xw2d=repmat(xr,[N+1 1]);
+D   =zw(N+1,:)-zw(1,:);
+D2d =repmat(D,[N 1]);
+Du  =zwu(N+1,:)-zwu(1,:);
+Du2d=repmat(Du,[N 1]);
+%
+[dyr,ix150] = min(abs(x+150));
+[dyr,ix0] = min(abs(x));
+[dyr,ixb] = min(abs(x+81));
+
+t0 = 5;
+tend=120;
+if isHs
+    % ---------------------------------------------------------------------
+    % --- read/compute significant wave height ---
+    % --------------------------------------------------------------------
+    % ... wave setup ...  
+    % time-averaged and alongshore <zeta>^2 
+    yend=size(y,1);
+
+    sup=squeeze(mean(mean(nc{'zeta'}(t0:tend,:,:),1),2))'; %  time-averaged
+    z0=sup;
+    z0(h0<Dcrit)=z0(h0<Dcrit)-h0(h0<Dcrit); % add slope
+
+    % ... Hrms ...
+    % time-averaged and alongshore <zeta^2>
+    zz=squeeze(mean(ncd{'zz'}(t0:tend,:,:),1)); % time-averaged
+
+    %zz=squeeze(mean(zz,1)); % average alongshore
+    % see Svendsen (2005) p.126
+    hrms=4.0083*sqrt(zz-z0.^2)/sqrt(2.0011); %max(0,...) ou abs
+    hs=squeeze(sqrt(2.0011)*hrms);
+    hs=squeeze(hs);
+else
+    hs=squeeze(var((nc{'zeta'}(t0:tend,:,:))));
+    hs(h0<Dcrit)=hs(h0<Dcrit)-h0(h0<Dcrit);
+end
+
+%% Plotting
+figure('Position',[100 100 500 900])
+h=pcolor(x(2:ix0),y(:,2:ix0),abs(hs(:,2:ix0))/(0.23*2*sqrt(2)));
+set(h,'EdgeColor','none');
+caxis([0.5 1.5])
+hold on
+%line(x(:,2:ix0),(x(:,2:ix0)+350)*tand(10));
+cb=colorbar();
+ylabel(cb,'$H_s$','Interpreter','latex' ...
+    ,'FontSize',19,'Rotation',360);
+cb.Label.Position(1) = 3;
+colormap("parula");
+xlabel("$x$ ($m$)",'Interpreter','latex','FontSize',19);
+ylabel("$y$ ($m$)",'Interpreter','latex','FontSize',19);
+%ylim([600 1000])
+if isHs
+    %title('$H_s$ averaged over '+string(time(tend)-time(t0))+' s', ...
+    title('Time-averaged $H_s$ ', ...
+        'Interpreter','latex','FontSize',15);
+else
+    title('Inst. $var(\eta)$ averaged over '+string(time(tend)-time(t0))+' s', ...
+        'Interpreter','latex');
+end
+
+%%
+
+sup=squeeze(mean(nc{'zeta'}(t0,:,:),2))'; %  time-averaged
+    z0=sup;
+    z0(h0<Dcrit)=z0(h0<Dcrit)-h0(h0<Dcrit); % add slope
+
+%h=pcolor(4*sqrt(abs(squeeze(ncd{'zz'}(5,:,:))-z0.^2))/(0.17*2*sqrt(2)));
+h=pcolor(4*sqrt(abs(squeeze(ncd{'zz'}(20,:,:))))/(0.17*2*sqrt(2)));
+set(h,'EdgeColor','none');
+colorbar();
+
+%%
+dirpath = '/Users/simon/Code/CONFIGS/testWMPlanMineSpongeFort2/';
+stname  = strcat(dirpath,'stations.nc');
+ncs=netcdf(stname,'r');
+
+ncs{'Xgrid'}(5)
+ncs{'Ygrid'}(5)
+zetas=ncs{'zeta'}(:);
+hss=4*std(zetas,1);
+
+plot(ncs{'Ygrid'}(6:end),hss(6:end))
+
+
+%%
+dirpath = '/Users/simon/Code/CONFIGS/testWMPlanRPamel/';
+dirpath = '/Users/simon/Code/CONFIGS/testWMPlanDefault2/';
+fname      = strcat(dirpath,'rip_avg.nc');
+nc=netcdf(fname,'r');
+time=nc{'time'}(:);
+zeta=nc{'zeta'}(t0:end,:,:);
+
+zeta1=squeeze(zeta(50,:,:));
+zeta2=squeeze(zeta(51,:,:));
+X=xcorr2(zeta1,zeta2);
+%X=(zeta1-zeta2);
+%X=squeeze((squeeze(zeta(51:end,:,:))-squeeze(zeta(50:end-1,:,:))));
+h=pcolor(X);
+set(h,'EdgeColor','none');
+caxis([-20 20])
+colorbar();
+

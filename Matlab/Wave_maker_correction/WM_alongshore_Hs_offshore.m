@@ -1,0 +1,84 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Alongshore significant wave height (for offshore sensors)
+% Simon Treillou, 2023
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+clear all
+close all
+%================== User defined parameters ===========================
+%
+% --- model params ---
+%
+stname1 = '/Users/simon/Code/CONFIGS/BAKER_G1D/stations.nc';
+stname2 = '/Users/simon/Code/CONFIGS/BAKER_G2B_default/stations.nc';
+
+tstr = 15*60;  % 15 minutes spin up
+
+%% DATA 
+
+repo="/Users/simon/Code/BAKER/G1D-IS/";
+vr='wg';
+WG = BAKER_read_data(repo,vr);
+
+for k=1:8
+    Xobs(k) = WG.("wg"+string(k)).x;
+    Yobs(k) = WG.("wg"+string(k)).y;
+    Zobs(k) = WG.("wg"+string(k)).z;
+    WGobs(1:size(WG.wg1.data),k) = WG.("wg"+string(k)).data;
+end
+Hz=100;
+WL=2^5;
+OL=2^4;
+
+for i=1:size(WGobs,2)
+    %wg4=wg4(50000:end);
+    [See,f,Seec] = pwelch(WGobs(tstr*Hz:end,i),WL*Hz,OL*Hz,[],Hz);
+    [~,ixTp]=max(abs(See));
+    Tpobs_off(i)=1/f(ixTp);
+    Hsobs_off(i)=4*sqrt(trapz(f,See));
+end
+
+%% MODEL 
+for i=1:2
+    if i==1
+        stname=stname1;
+    elseif i==2
+        stname=stname2;
+    end
+    nc=netcdf(stname,'r');
+    xpos=nc{'Xgrid'}(:);
+    ypos=nc{'Ygrid'}(:);
+    sta=find(((xpos==40)));
+    % x-positions
+    xpos=nc{'Xgrid'}(:);
+    xpos=xpos(sta);
+    % y-positons
+    ypos=nc{'Ygrid'}(:);
+    ypos=ypos(sta);
+    tend=length(nc{'scrum_time'}(:));
+    zeta1=nc{'zeta'}(tstr:tend,:);
+    zeta1=zeta1(:,sta);
+    time=nc{'scrum_time'}(tstr:tend);
+    hs=4*std(zeta1);
+    if i==1
+        hs1=hs;
+    elseif i==2;
+        hs2=hs;
+    end
+end
+
+%% PLOTTING OFFSHORE ARRAY (X~19m)
+
+figure('Position',[500 500 1400 500]);
+plot(Yobs,Hsobs_off,'o','Color','k','LineWidth',2);
+hold on
+xlabel('$y (m)$','Interpreter','latex','FontSize',15);
+ylabel('$H_s$ $(m)$','Interpreter','latex','FontSize',15);
+grid("minor");
+plot(ypos(2:end)/10-15,hs2(2:end),'*-','LineWidth',3,'Color',[111,160,135,0.7*255]/255);
+plot(ypos(2:end)/10-15,hs1(2:end),'*-','LineWidth',3,'Color',[192,24,135,0.7*255]/255);
+legend('Data','Default','Corrected', ...
+    'Interpreter','latex','FontSize',15,'Location','northwest');
+title("Offshore",'Interpreter','latex','FontSize',18);
+print(gcf, '-dpdf','-bestfit', './Figures/Baker-hs_offshore.pdf');

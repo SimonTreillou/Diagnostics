@@ -1,0 +1,138 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%clear all
+close all
+%================== User defined parameters ===========================
+%
+% --- model params ---
+%
+fname1     = '/Users/simon/Code/CONFIGS/IB09_randomphase_S30/rip_avgtot.nc';   % croco history file name
+fname2     = '/Users/simon/Code/CONFIGS/IB09_21AVR_S10/rip_avgtot.nc';   % croco history file name
+
+var = 'temp';         % which tracer temperature or passive tracer
+%
+%======================================================================
+
+nfiles = 2;
+Jstr=500;
+g = 9.81;
+
+% ---------------------------------------------------------------------
+% --- get grid from numerical model ---
+% ---------------------------------------------------------------------
+
+for i=1:nfiles
+    if i==1
+        fname=fname1;
+    elseif i==2
+        fname=fname2;
+    end
+    nc=netcdf(fname);
+    time=nc{'scrum_time'}(:);
+    yr=squeeze(nc{'y_rho'}(:,1));
+    xr=squeeze(nc{'x_rho'}(1,:));
+    
+    % Compute <u'T'>
+    t=squeeze(nc{var}(:,10,Jstr:end,:));
+    t=(t(:,:,2:end)+t(:,:,1:end-1))/2;
+    tp=t-mean(t);
+    u=squeeze(nc{'ubar'}(:,Jstr:end,:));
+    up=u-mean(u);
+    upTp=up.*tp;
+    mupTp=squeeze(mean(upTp));
+    mupTp=(mupTp(2:end,:)-mupTp(1:end-1,:))/2;
+    if i==1
+        mupTp1=mupTp;
+    elseif i==2
+        mupTp2=mupTp;
+    end
+
+    % Compute dT/dx and dT/dy
+    t=squeeze(nc{var}(:,10,Jstr:end,:));
+    dy=yr(2)-yr(1);
+    % moyenne de T
+    dx=xr(2)-xr(1);
+    dTdy=(t(:,2:end,:)-t(:,1:end-1,:))/dy;
+    dTdx=(t(:,:,2:end)-t(:,:,1:end-1))/dx;
+    dTdy=(dTdy(:,:,2:end)-dTdy(:,:,1:end-1))/2;
+    dTdx=(dTdx(:,2:end,:)-dTdx(:,1:end-1,:))/2;
+
+    dTdxi=squeeze(mean(dTdx(:,:,:)));
+    dTdxi=squeeze(dTdx(end,:,:));
+    indexes=abs(dTdxi)<1e-4;
+    dTdxi(indexes)=nan;
+    
+    dTdyi=squeeze(mean(dTdy(:,:,:)));
+    indexes=abs(dTdyi)<1e-4;
+    dTdyi(indexes)=nan;
+    
+    if i==1
+        kxx1=abs(mupTp(:,:)./dTdxi);
+        kyy1=abs(mupTp(:,:)./dTdyi);
+    elseif i==2
+        kxx2=abs(mupTp(:,:)./dTdxi);
+        kyy2=abs(mupTp(:,:)./dTdyi);
+    end
+end
+
+%% PLOTTING KXX SURFACE
+kxx=kxx1;
+figure();
+h=pcolor(kxx);
+set(h,'EdgeColor', 'none');
+colorbar();
+caxis([0,5])
+ylabel("$y$ (m)",'Interpreter','latex');
+xlabel("$x$ (m)",'Interpreter','latex');
+title("$\kappa_{xx}$ ($\overline{u'T'}=\kappa_{xx} \frac{\partial T}{\partial x}$)",'Interpreter','latex');
+
+%% PLOTTING KXX ALONGSHORE AVERAGED
+figure();
+sz=0:0.001:10;
+plot(sz./sz*-81,sz,'LineStyle','--','LineWidth',2,'Color',[0.7 0.7 0.7]);
+ylim([0,0.7]);
+hold on
+for i=1:nfiles
+    if i==1
+        plot((xr(1,2:end)+xr(1,1:end-1))/2-300,smooth(nanmean(kxx1)) ...
+    ,'LineWidth',2,'Color','blue');
+    elseif i==2
+        plot((xr(1,2:end)+xr(1,1:end-1))/2-300,smooth(nanmean(kxx2)) ...
+    ,'LineWidth',2,'Color','red');
+    end
+end
+ylabel("$<\kappa_{xx}>_y$ (m)",'Interpreter','latex','FontSize',15);
+xlabel("$x$ (m)",'Interpreter','latex','FontSize',15);
+grid();
+text(-50,0.6,'$\textbf{SZ}$','FontSize',19,'Interpreter','latex','Color',[0.5 0.5 0.5]);
+text(-150,0.6,'$\textbf{IS}$','FontSize',19,'Interpreter','latex','Color',[0.5 0.5 0.5]);
+legend('','$\sigma_{\theta}$=30','$\sigma_{\theta}$=10','Interpreter','latex','FontSize',13)
+title("Alongshore-averaged $\kappa_{xx}$ ($\overline{u'T'}=\kappa_{xx} \frac{\partial T}{\partial x}$)",'Interpreter','latex','FontSize',20);
+
+%% PLOTTING KYY SURFACE
+figure();
+kyy=kyy1;
+h=pcolor(kyy);
+set(h,'EdgeColor', 'none');
+colorbar();
+%caxis([-5,5])
+ylabel("$y$ (m)",'Interpreter','latex');
+xlabel("$x$ (m)",'Interpreter','latex');
+title("$\kappa_{yy}$ ($\overline{u'T'}=\kappa_{yy} \frac{\partial T}{\partial y}$)",'Interpreter','latex');
+
+%% PLOTTING KYY ALONGSHORE AVERAGED
+figure();
+hold on
+for i=1:nfiles
+    if i==1
+        plot((xr(1,2:end)+xr(1,1:end-1))/2,smooth(nanmean(kyy1)) ...
+    ,'LineWidth',2);
+    elseif i==2
+        plot((xr(1,2:end)+xr(1,1:end-1))/2,smooth(nanmean(kyy2)) ...
+    ,'LineWidth',2);
+    end
+end
+ylabel("$<\kappa_{yy}>_y$ (m)",'Interpreter','latex');
+xlabel("$x$ (m)",'Interpreter','latex');
+grid();
+legend('$\sigma_{\theta}$=30','$\sigma_{\theta}$=10','Interpreter','latex')
+title("Alongshore-averaged $\kappa_{yy}$ ($\overline{u'T'}=\kappa_{yy} \frac{\partial T}{\partial y}$)",'Interpreter','latex');

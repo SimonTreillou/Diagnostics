@@ -1,0 +1,294 @@
+clear all
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% PARAMETERS
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+gamma=2.0;
+wd=10*(pi/180);
+wds=10*(pi/180);
+wa=0.2;
+h=10;
+Tp=5;
+
+% Basics
+g=9.81;
+K1=0.666666666;K2=0.3555555555;K3=0.1608465608;
+K4=0.063209876;K5=0.0217540484;K6=0.0065407983;
+
+% Computational
+Nf=1125;
+Ndir=31;
+
+T=5;
+dt=1;
+Nt=T/dt+1;
+t=0:dt:T;
+
+X=211;
+dx=1;
+Nx=X/dx+1;
+x=0:dx:X;
+
+Y=211;
+dy=1;
+Ny=Y/dy+1;
+y=0:dy:Y;
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% FREQUENCY SPECTRUM
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+alpha=0.06238/(0.23+0.0336*gamma-0.185*(1.9+gamma)^(-1))*(1.094-0.01915*log(gamma));
+[w,S]=jonswap_spectrum(alpha,Nf,Tp,gamma,1);
+disp(trapz(w,S));
+St=sum(S);
+%Sbin=S;
+%S=sqrt(S);
+%S=sqrt(S/sum(S));
+%S=wa*S;
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% WAVE NUMBERS
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+clear k
+for i=1:Nf
+    k(i)=w_to_k(w(i),h);
+end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% DIRECTIONAL SPECTRUM
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+dmin=wd-90*(pi/180);
+dmax=wd+90*(pi/180);
+dd=(dmax-dmin)/Ndir;
+cff4=0;
+%Nf=Ndir;
+D=zeros(1,Nf);
+wd_bry=zeros(1,Nf);
+[~,displace_theta] =  min(abs(w-2*pi/Tp)); %minloc(abs(Freq-fm));
+idx_theta = mod(displace_theta,Ndir);
+for i=1:Nf
+    wd_bry(i)=dmin+(mod(i+Ndir/2-idx_theta-1,Ndir)+1)*dd;
+    %wd_bry(i)=wd;
+    %wd_bry(i)=real(asin(2*pi/(round(k(i)*sin(wd_bry(i))*Y/(2*pi))*Y*k(i))));
+    %if (mod(i-idx_theta,Ndir))<=0; wd_bry(i)=wd_bry(i)+(mod(i-idx_theta,Ndir))*Ndir*dd;end;
+    D(i)=exp(-((wd_bry(i)-wd)^2/(max(wds*1.5,1.e-12)^2)));
+end
+
+% plot(S);
+% hold on
+% plot(S.*D);
+
+%D=sqrt(D/sum(D));
+%displ=mod((1:length(w))-1,Ndir)+1;
+%D=D(displ)*(St/(D(disp)*S'));
+D=D*St/(D*S');
+%D=sqrt(D/(D*S'));
+%S=sqrt(S);
+
+trapz(S)
+trapz((S.*D))
+
+sum(D*St/(D*S').*S)
+
+cff=0;
+for i=1:Nf
+    cff=cff+D(i)*S(i);
+end
+
+a1=D.*S/sqrt(St);
+trapz(w,S/sqrt(St))
+trapz(w,D.*S/sqrt(St))
+
+
+vari=20;
+for ny=1:Ny
+    if ny<vari
+        test(ny)=(cos(pi+pi*(ny/vari))+1)/2
+    elseif ny>Ny-vari
+        test(ny)=(cos(pi*((ny-(Ny-vari))/vari))+1)/2
+    else
+        test(ny)=1.
+    end
+end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% FREE SURFACE
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+eta=zeros(Ny,Nx,Nt);
+kp=w_to_k((2*pi)/Tp,h);
+u=zeros(Ny,Nx,Nt);
+v=zeros(Ny,Nx,Nt);
+eps=rand(length(w),1)*2*pi;
+for n=1:Nx % SPACE
+    disp("X="+string(n));
+    for ny=1:Ny % SPACE
+        for j=1:Nt % TIME
+            tmp=0;tmp_u=0;tmp_v=0;
+            for i=1:length(w) % FREQUENCIES
+                %jw=mod(i-1,Ndir)+1;
+                tmp=tmp+sqrt(S(i)*D(i)*(wa*2*sqrt(2))^2/8/sqrt(St))*cos(k(i)*cos(wd_bry(i))*x(n) ...
+                         +k(i)*sin(wd_bry(i))*y(ny) ...
+                         -w(i)*t(j)-eps(i));    
+
+%                 for jw=1:length(wd_bry) % DIRECTIONS
+%                         tmp=tmp+S(i)*D(jw)*cos(k(i)*cos(wd_bry(jw))*x(n) ...
+%                          +k(i)*sin(wd_bry(jw))*y(ny) ...
+%                          -w(i)*t(j)-eps(i,jw));     
+%                 end
+            end
+            eta(ny,n,j)=tmp;
+            eta2(ny,n,j)=test(ny)*tmp;
+            u(ny,n,j)=eta(ny,n,j)*(2*pi/Tp)*cos(wd)*cosh(h*kp)/sinh(h*kp);
+            v(ny,n,j)=eta(ny,n,j)*(2*pi/Tp)*sin(wd)*cosh(h*kp)/sinh(h*kp);
+        end
+    end
+end
+
+disp("Hs attendu : "+string(2*sqrt(2)*wa));
+disp("Hs observé : "+string(4*std(eta(:))));
+disp("Hs observé : "+string(4*std(eta2(:))));
+
+pcolor(circshift(eta(:,:,4),50))
+
+%%
+zz=eta(:,3,2);
+plot(y,circshift(zz,50))
+vari=20
+cible=(zz(end)+zz(1))/2;
+for n=1:Ny
+    ny=n;
+    if ny<vari
+        test(n)=((cos(pi+pi*((ny)/vari))+1)/2)*(1-cible/(zz(1)+1e-5))+cible/(zz(1)+1e-5);
+    elseif ny>(Ny-vari)
+        test(n)=((cos(pi*(((ny+1)-(Ny-vari+1))/vari))+1)/2)*(1-cible/zz(end))+cible/zz(end);
+    else
+        test(n)=1.;
+    end
+end
+hold on
+plot(y,circshift(zz.*test',50));
+
+%%
+zz=eta(:,2,100);
+
+vari=5
+for n=1:Ny
+    ny=n;
+    if ny<vari
+        test(n)=(cos(pi+pi*((ny)/vari))+1)/2;
+    elseif ny>(Ny-vari)
+        test(n)=(cos(pi*(((ny+1)-(Ny-vari+1))/vari))+1)/2;
+    else
+        test(n)=1.;
+    end
+end
+% test(1:21)=(test(end-20:end))*(wa-zz(20))+zz(20);
+% test(1:21)=test(1:21)./zz(1:21)';
+
+plot(y,zz)
+hold on
+plot(y,zz.*test')
+
+
+%%
+
+DF=D'*S;
+h=surf(w,wd_bry,DF);
+set(h,'EdgeColor','none');
+colorbar();
+ylabel("Directions");
+xlabel("Frequencies");
+
+%%
+res=mscohere(eta(1,1,:),eta(2,2,:),hann(50),50,1025);
+mscohere()
+
+
+%%
+((1:1125)*2*pi)./(k.*sin(wd_bry))
+
+ki=w_to_k(2*pi/Tp,9.6);
+
+%%
+i=31*10+11;
+Theta_temp=wd_bry(i);
+disp(Theta_temp*180/pi);
+L=211;
+
+n=0;
+tmp3=0;
+tmp1=k(i);
+tmp2=(1:10)*2*pi/L;
+
+BCtheta=zeros(Nf,1);
+for i=1:Nf
+    Theta_temp=wd_bry(i);
+    tmp1=k(i);
+    tmp2=2*pi/L;
+    disp(tmp2<tmp1)
+    if tmp2<tmp1
+        Pmax=floor(tmp1/tmp2);
+        diff=abs(asin(-Pmax*tmp2/tmp1)-Theta_temp);
+        BCth=asin(-Pmax*tmp2/tmp1);
+        for p=-Pmax:Pmax
+            diff2=abs(asin(p*tmp2/tmp1)-Theta_temp);
+            if diff2<diff
+                BCth=asin(p*tmp2/tmp1);
+            end
+        end
+        BCtheta(i)=BCth;
+    else
+        BCtheta(i)=0.0;
+    end
+end
+
+
+BCtheta=zeros(Nf,1);
+for i=1:Nf
+    Theta_temp=abs(wd_bry(i));
+    tmp1=k(i);
+    tmp2=2*pi/L;
+    disp(i)
+    if tmp2<tmp1
+        cible=tmp1*sin(Theta_temp)/(tmp2);
+        cible1=999;
+        n=1;
+        if abs(cible)>=1.0
+            while (abs(fix(cible)-cible1)>e-3)&&(n<100000)
+                cible1pos=tmp1*sin(Theta_temp+0.00005)/(tmp2);
+                if abs(fix(cible))>abs(cible1pos)
+                    Theta_temp=Theta_temp+0.00005;
+                    cible1=cible1pos;
+                else
+                    Theta_temp=Theta_temp-0.00005;
+                    cible1=tmp1*sin(Theta_temp-0.00005)/(tmp2);
+                end
+                n=n+1;
+            end
+        else
+            Theta_temp=0.0;
+        end
+        BCtheta(i)=sign(wd_bry(i))*Theta_temp;
+        ns(i)=n;
+    else
+        BCtheta(i)=0.0;
+    end
+end
+
+plot(BCtheta)
+hold on
+plot(wd_bry)
+
+plot((BCtheta-wd_bry')*180/pi)
+
+plot(k.*sin(BCtheta')/(2*pi/L))
+hold on
+plot(round(k.*sin(BCtheta')/(2*pi/L)))
+
+plot(k.*sin(wd_bry)/(2*pi/L))
+hold on
+plot(round(k.*sin(wd_bry)/(2*pi/L)))
+plot(k.*sin(BCtheta')/(2*pi/L))
+
+
+
+

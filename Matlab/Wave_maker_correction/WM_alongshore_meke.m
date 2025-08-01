@@ -1,0 +1,323 @@
+clear all
+%close all
+%================== User defined parameters ====================
+%
+% --- model params ---
+%
+stname1 = '/Users/simon/Code/CONFIGS/BAKER_G1D/stations.nc';
+stname2 = '/Users/simon/Code/CONFIGS/BAKER_G2B_default/stations.nc';
+
+makepdf   = 0;                       % make pdf file
+%
+%===============================================================
+
+%% DATA SZ
+TR="G1D";
+
+trial=TR+"-SZ";
+vr='u';
+load('/Users/simon/Code/BAKER/'+trial+'/'+vr+'1.txt')
+load('/Users/simon/Code/BAKER/'+trial+'/'+vr+'2.txt');
+load('/Users/simon/Code/BAKER/'+trial+'/'+vr+'3.txt');
+load('/Users/simon/Code/BAKER/'+trial+'/'+vr+'4.txt');
+load('/Users/simon/Code/BAKER/'+trial+'/'+vr+'5.txt');
+load('/Users/simon/Code/BAKER/'+trial+'/'+vr+'6.txt');
+load('/Users/simon/Code/BAKER/'+trial+'/'+vr+'7.txt');
+load('/Users/simon/Code/BAKER/'+trial+'/'+vr+'8.txt');
+load('/Users/simon/Code/BAKER/'+trial+'/'+vr+'9.txt');
+load('/Users/simon/Code/BAKER/'+trial+'/'+vr+'10.txt');
+load('/Users/simon/Code/BAKER/'+trial+'/'+vr+'11.txt');
+load('/Users/simon/Code/BAKER/'+trial+'/'+vr+'12.txt');
+
+vr='v';
+load('/Users/simon/Code/BAKER/'+trial+'/'+vr+'1.txt')
+load('/Users/simon/Code/BAKER/'+trial+'/'+vr+'2.txt');
+load('/Users/simon/Code/BAKER/'+trial+'/'+vr+'3.txt');
+load('/Users/simon/Code/BAKER/'+trial+'/'+vr+'4.txt');
+load('/Users/simon/Code/BAKER/'+trial+'/'+vr+'5.txt');
+load('/Users/simon/Code/BAKER/'+trial+'/'+vr+'6.txt');
+load('/Users/simon/Code/BAKER/'+trial+'/'+vr+'7.txt');
+load('/Users/simon/Code/BAKER/'+trial+'/'+vr+'8.txt');
+load('/Users/simon/Code/BAKER/'+trial+'/'+vr+'9.txt');
+load('/Users/simon/Code/BAKER/'+trial+'/'+vr+'10.txt');
+load('/Users/simon/Code/BAKER/'+trial+'/'+vr+'11.txt');
+load('/Users/simon/Code/BAKER/'+trial+'/'+vr+'12.txt');
+
+Uobs=[u1 u2 u3 u4 u5 u6 u7 u8];
+Uobs=Uobs(5000:end-100,:);
+Vobs=[v1 v2 v3 v4 v5 v6 v7 v8];
+Vobs=Vobs(5000:end-100,:);
+
+mUobs=mean(Uobs);
+mVobs=mean(Vobs);
+Upobs=Uobs-mUobs;
+Vpobs=Vobs-mVobs;
+ekeObs=0.5*(Upobs.^2 + Vpobs.^2);
+mekeObs=squeeze(mean(ekeObs));
+stdmekeObs=squeeze(std(ekeObs));
+
+%% CROCO SZ
+% le problème ici, c'est que dans les observations le point où est mesurée
+% la vitesse est fixé, tandis que dans la simu non, les niveaux bougent
+% avec les vagues
+
+
+fname ='/Users/simon/Code/CONFIGS/BAKER_G1D/rip_his.nc';
+nc=netcdf(fname);
+h=nc{'h'}(1,:);
+x=nc{'x_rho'}(1,:)+15;
+dx=1./nc{'pm'}(1,1);
+plot(x,-h);
+hold on
+%plot(unique(xpos),-h(unique(xpos)),'o');
+
+for i=1:1
+    if i==1
+        stname=stname1;
+    elseif i==2
+        stname=stname2;
+    end
+    nc=netcdf(stname,'r');
+    xpos=nc{'Xgrid'}(:);
+    ypos=nc{'Ygrid'}(:);
+    %sta=find(((xpos==40)));
+    sta=find(((xpos==135)));
+    % x-positions
+    xpos=nc{'Xgrid'}(:);
+    xpos=xpos(sta);
+    % y-positons
+    ypos=nc{'Ygrid'}(:);
+    ypos=ypos(sta);
+    tstr=5000;
+    %d=nc{'depth'}(tstr:tend,:,:);
+    [~,xcap] = min(abs(x-(135*dx+15)));
+    depth = 1.07-h(xcap);
+    depthObj = 0.904;
+    
+    tend=length(nc{'scrum_time'}(:));
+    zeta1=nc{'zeta'}(tstr:tend,:);
+    zeta1=zeta1(:,sta);
+    dT = 1.07 + zeta1;
+
+    u1=squeeze(nc{'u'}(tstr:tend,:,:));
+    u1=u1(:,sta,:);
+
+    %u=squeeze(mean(nc{'u'}(tstr:tend,:,:),3));
+    %u=u(:,sta);
+    v1=squeeze(nc{'v'}(tstr:tend,:,:));
+    v1=v1(:,sta,:);
+    for ss=1:length(sta)
+        for tt=1:length(v1)
+            dz = (dT(tt,ss)-depth)/9;
+            lvlvalues = linspace(depth,dT(tt,ss),10);
+            [~,lvl]=min(abs(lvlvalues-depthObj));
+            lvl=10-lvl;
+            disp(depth+lvl*dz);
+            v(tt,ss)=v1(tt,ss,lvl);
+            u(tt,ss)=u1(tt,ss,lvl);
+        end
+    end
+    %v=squeeze(mean(nc{'v'}(tstr:tend,:,:),3));
+    %v=v(:,sta);
+    time=nc{'scrum_time'}(tstr:tend);
+%     clear u
+%     clear v
+%     for tt=1:(tend-tstr)
+%         for ss=1:length(sta)
+%             [~,ih]=min(abs(1.07+d(tt,ss,:)-dt));
+%             u(tt,ss)=u1(tt,ih,ss);
+%             v(tt,ss)=v1(tt,ih,ss);
+%         end
+%         disp(ih)
+%     end
+    mu=mean(u);
+    mv=mean(v);
+    up=u-mu;
+    vp=v-mv;
+    eke=0.5*(up.^2 + vp.^2);
+    if i==1
+        meke1=squeeze(mean(eke));
+    elseif i==2
+        meke2=squeeze(mean(eke));
+    end
+%     zeta1=nc{'zeta'}(:,:);
+%     D=nc{'depth'}(:,:,:);
+%     D=D(:,sta,:);
+%     D(D>1e4)=nan;
+%     D=squeeze(mean(D(500:end,:,:)));
+%     plot(D(:,:)'+1.07);
+
+    %stdmeke=squeeze(std(eke));
+end
+
+
+%% PLOTTING SZ
+
+figure('Position',[500 500 1000 500]);
+
+plot(ypos(1:8),mekeObs,'o','Color','k','LineWidth',2);
+hold on
+xlabel('$y (m)$','Interpreter','latex','FontSize',15);
+ylabel('Mean EKE $(m^2.s^{-2})$','Interpreter','latex','FontSize',15);
+title('Surfzone mean EKE','Interpreter','latex','FontSize',15)
+grid("minor");
+%plot(ypos,meke2,'LineWidth',3,'Color',[111,160,135,0.7*255]/255);
+plot(ypos,meke1,'LineWidth',3,'Color',[192,24,135,0.7*255]/255);
+ylim([0 0.1]);
+xlim([70 190])
+%legend('Data','Default RMSE='+string(round(rmse(mekeObs,meke2),3)), ...
+%    'Corrected RMSE='+string(round(rmse(mekeObs,meke1),3)), ...
+%    'Interpreter','latex','FontSize',15);
+print(gcf, '-dpdf', './Figures/Baker-eke.pdf');
+
+
+%% INNER-SHELF
+
+trial="G2C-IS";
+%trial="G2B-SZ";
+vr='u';
+load('/Users/simon/Code/BAKER/'+trial+'/'+vr+'1.txt')
+load('/Users/simon/Code/BAKER/'+trial+'/'+vr+'2.txt');
+load('/Users/simon/Code/BAKER/'+trial+'/'+vr+'3.txt');
+load('/Users/simon/Code/BAKER/'+trial+'/'+vr+'4.txt');
+load('/Users/simon/Code/BAKER/'+trial+'/'+vr+'5.txt');
+load('/Users/simon/Code/BAKER/'+trial+'/'+vr+'6.txt');
+load('/Users/simon/Code/BAKER/'+trial+'/'+vr+'7.txt');
+load('/Users/simon/Code/BAKER/'+trial+'/'+vr+'8.txt');
+load('/Users/simon/Code/BAKER/'+trial+'/'+vr+'9.txt');
+load('/Users/simon/Code/BAKER/'+trial+'/'+vr+'10.txt');
+load('/Users/simon/Code/BAKER/'+trial+'/'+vr+'11.txt');
+load('/Users/simon/Code/BAKER/'+trial+'/'+vr+'12.txt');
+
+vr='v';
+load('/Users/simon/Code/BAKER/'+trial+'/'+vr+'1.txt')
+load('/Users/simon/Code/BAKER/'+trial+'/'+vr+'2.txt');
+load('/Users/simon/Code/BAKER/'+trial+'/'+vr+'3.txt');
+load('/Users/simon/Code/BAKER/'+trial+'/'+vr+'4.txt');
+load('/Users/simon/Code/BAKER/'+trial+'/'+vr+'5.txt');
+load('/Users/simon/Code/BAKER/'+trial+'/'+vr+'6.txt');
+load('/Users/simon/Code/BAKER/'+trial+'/'+vr+'7.txt');
+load('/Users/simon/Code/BAKER/'+trial+'/'+vr+'8.txt');
+load('/Users/simon/Code/BAKER/'+trial+'/'+vr+'9.txt');
+load('/Users/simon/Code/BAKER/'+trial+'/'+vr+'10.txt');
+load('/Users/simon/Code/BAKER/'+trial+'/'+vr+'11.txt');
+load('/Users/simon/Code/BAKER/'+trial+'/'+vr+'12.txt');
+
+Uobs=[u1 u2 u3 u4 u5 u6 u7 u8];
+%Uobs=[u4 u5 u6 u7 u8 u9 u10 u11 u12];
+Uobs=Uobs(5000:end-100,:);
+Vobs=[v1 v2 v3 v4 v5 v6 v7 v8];
+%Vobs=[v4 v5 v6 v7 v8 v9 v10 v11 v12];
+Vobs=Vobs(5000:end-100,:);
+
+mUobs=mean(Uobs);
+mVobs=mean(Vobs);
+Upobs=Uobs-mUobs;
+Vpobs=Vobs-mVobs;
+ekeObs=0.5*(Upobs.^2 + Vpobs.^2);
+mekeObs=squeeze(mean(ekeObs));
+stdmekeObs=squeeze(std(ekeObs));
+
+%% CROCO IS
+for i=1:2
+    if i==1
+        stname=stname1;
+    elseif i==2
+        stname=stname2;
+    end
+    nc=netcdf(stname,'r');
+    xpos=nc{'Xgrid'}(:);
+    ypos=nc{'Ygrid'}(:);
+    sta=find(((xpos==120)));
+    %sta=find(((xpos==135)));
+    % x-positions
+    xpos=nc{'Xgrid'}(:);
+    xpos=xpos(sta);
+    % y-positons
+    ypos=nc{'Ygrid'}(:);
+    ypos=ypos(sta);
+    tstr=20;
+    Lvl=1;
+    tend=length(nc{'scrum_time'}(:));
+    zeta1=nc{'zeta'}(tstr:tend,:);
+    zeta1=zeta1(:,sta);
+    u=squeeze(nc{'u'}(tstr:tend,:,Lvl));
+    %u=squeeze(mean(nc{'u'}(tstr:tend,:,:),3));
+    u=u(:,sta);
+    v=squeeze(nc{'v'}(tstr:tend,:,Lvl));
+    %v=squeeze(mean(nc{'v'}(tstr:tend,:,:),3));
+    v=v(:,sta);
+    time=nc{'scrum_time'}(tstr:tend);
+    mu=mean(u);
+    mv=mean(v);
+    up=u-mu;
+    vp=v-mv;
+    eke=0.5*(up.^2 + vp.^2);
+    if i==1
+        meke1=squeeze(mean(eke));
+    elseif i==2
+        meke2=squeeze(mean(eke));
+    end
+end
+
+%% PLOTTING IS
+
+figure('Position',[500 500 1000 500]);
+
+plot(ypos,mekeObs,'o','Color','k','LineWidth',2);
+hold on
+xlabel('$y (m)$','Interpreter','latex','FontSize',15);
+ylabel('Mean EKE $(m^2.s^{-2})$','Interpreter','latex','FontSize',15);
+title('Surfzone mean EKE','Interpreter','latex','FontSize',15)
+grid("minor");
+plot(ypos,meke2,'LineWidth',3,'Color',[111,160,135,0.7*255]/255);
+plot(ypos,meke1,'LineWidth',3,'Color',[192,24,135,0.7*255]/255);
+%ylim([0 0.1]);
+%xlim([70 190])
+legend('Data','Default RMSE='+string(round(rmse(mekeObs,meke2),3)), ...
+    'Corrected RMSE='+string(round(rmse(mekeObs,meke1),3)), ...
+    'Interpreter','latex','FontSize',15);
+print(gcf, '-dpdf', './Figures/Baker-eke.pdf');
+
+
+%% VITESSE PAR VITESSE
+for i=1:2
+    if i==1
+        stname=stname1;
+    elseif i==2
+        stname=stname2;
+    end
+    nc=netcdf(stname,'r');
+    xpos=nc{'Xgrid'}(:);
+    ypos=nc{'Ygrid'}(:);
+    sta=find(((xpos==95)));
+    %sta=find(((xpos==135)));
+    % x-positions
+    xpos=nc{'Xgrid'}(:);
+    xpos=xpos(sta);
+    % y-positons
+    ypos=nc{'Ygrid'}(:);
+    ypos=ypos(sta);
+    tstr=5000;
+    Lvl=1;
+    tend=length(nc{'scrum_time'}(:));
+    zeta1=nc{'zeta'}(tstr:tend,:);
+    zeta1=zeta1(:,sta);
+    u=squeeze(nc{'u'}(tstr:tend,sta,:));
+    %u=squeeze(mean(nc{'u'}(tstr:tend,:,:),3));
+    u=u(:,sta);
+    v=squeeze(nc{'v'}(tstr:tend,:,Lvl));
+    %v=squeeze(mean(nc{'v'}(tstr:tend,:,:),3));
+    v=v(:,sta);
+    time=nc{'scrum_time'}(tstr:tend);
+    mu=mean(u);
+    mv=mean(v);
+    up=u-mu;
+    vp=v-mv;
+    eke=0.5*(up.^2 + vp.^2);
+    if i==1
+        meke1=squeeze(mean(eke));
+    elseif i==2
+        meke2=squeeze(mean(eke));
+    end
+end

@@ -1,0 +1,291 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Figure 3 from Hally-Rosendahl & Feddersen, 2016
+% Significant wave height Hs and alongshore average velocity V
+% Simon Treillou, 2022
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+clear all
+%close all
+%================== User defined parameters ===========================
+%
+% --- model params ---
+%
+%dirpath    = '/Users/simon/Code/CONFIGS/IB09_exp_Qnew/';
+%dirpath    = '/Users/simon/Code/IB09/b3_i016_w85_s30_ang7_a023/';
+dirpath    = '/Users/simon/Code/IB09/IB09PATPSdx1bathynewang11strat10radiatif_newWM/';
+%dirpath    = '/Users/simon/Code/IB09/testVADVC2periodok/';
+%dirpath    = '/Users/simon/Code/CONFIGS/RIP/';
+%dirpath    = '/Users/simon/Code/CONFIGS/Compile_Patrick/';
+dirpath    = '/Users/simon/Code/CONFIGS/IB09_21AVR_S10/';   % croco history file name
+%dirpath    = '/Users/simon/Code/CONFIGS/IB09_randomphase_S30/';   % croco history file name
+dirpath    = '/Users/simon/Code/CONFIGS/WM-Corrected-S10/';   % croco history file name
+%dirpath    = '/Users/simon/Code/CONFIGS/WM-Default-S10/';   % croco history file name
+fname      = strcat(dirpath,'rip_avg.nc');
+dianame    = strcat(dirpath,'rip_diags_eddy_avgtot.nc');
+hname      = strcat(dirpath,'rip_histot.nc');
+model3D   = 1;
+Jstr=401;
+Dcrit=0.2;
+%
+%======================================================================
+%%
+% ---------------------------------------------------------------------
+% --- get grid from numerical model ---
+% ---------------------------------------------------------------------
+
+nc=netcdf(fname,'r');
+ncd=netcdf(dianame,'r');
+isdiag = true;
+if isempty(ncd); isdiag=false; end
+nch=netcdf(hname,'r');
+
+tstr=1;
+time=squeeze(nc{'scrum_time'}(:));
+tend=length(time);
+if tend<tstr; tstr=1; end;
+
+% horizontal grid
+yr=squeeze(nc{'y_rho'}(Jstr:end,:));
+[dyr,yindex] = min(abs(yr(:,1)-248));
+hr=squeeze(nc{'h'}(yindex,:));
+xr=squeeze(nc{'x_rho'}(yindex,:));
+xu=0.5*(xr(1:end-1)+xr(2:end));
+L=length(hr);
+xl=nc{'xl'}(:);
+y=nc{'y_rho'}(Jstr:end,:);
+pm=nc{'pm'}(Jstr:end,:);
+pn=nc{'pn'}(Jstr:end,:);
+dx=unique(pm);
+dy=unique(pn);
+
+%
+% vertical grid
+h=hr;
+beach_l = 50%abs(min(h)/0.02); % 0.02 is beach slope (cf HR16)
+x=xr-xl+beach_l;
+xu=xu-xl+beach_l;
+h0=hr;
+N=length(nc('s_rho'));
+theta_s=nc.theta_s(:); 
+theta_b=nc.theta_b(:); 
+hc=nc.hc(:); 
+zeta=squeeze(nc{'zeta'}(tend,yindex,:));
+Dcrit=nc{'Dcrit'}(:)*1.0;
+zeta(h<Dcrit)=zeta(h<Dcrit)-h(h<Dcrit); % add land topo
+zr=squeeze(zlevs(h,zeta,theta_s,theta_b,hc,N,'r',2));
+zw=squeeze(zlevs(h,zeta,theta_s,theta_b,hc,N,'w',2));
+zru=0.5*(zr(:,1:end-1)+zr(:,2:end));
+zwu=0.5*(zw(:,1:end-1)+zw(:,2:end));
+dz1=zr(1,:)-zw(1,:);
+dzu1=zru(1,:)-zwu(1,:);
+dzu3=zru(3,:)-zwu(1,:);
+%
+xr2d=repmat(xr,[N 1]);
+xu2d=repmat(xu,[N 1]);
+xw2d=repmat(xr,[N+1 1]);
+D   =zw(N+1,:)-zw(1,:);
+D2d =repmat(D,[N 1]);
+Du  =zwu(N+1,:)-zwu(1,:);
+Du2d=repmat(Du,[N 1]);
+%
+[dyr,ix150] = min(abs(x+150));
+[dyr,ix0] = min(abs(x));
+[dyr,ixb] = min(abs(x+81));
+%
+% Loading positions
+load Data/HR16_fig3_Vmod.mat
+load Data/HR16_fig3_Vobs.mat
+
+load Data/HR16_fig3_Hsmod.mat
+load Data/HR16_fig3_Hsobs.mat
+
+% ---------------------------------------------------------------------
+% --- read/compute 3D model fields (tindex) ---
+% --------------------------------------------------------------------
+% ... zonal velocity ...                         ---> xu,zu
+u=squeeze(nc{'u'}(tend,:,yindex,:));
+
+% ... vertical velocity ...                      ---> xr,zw
+w=squeeze(nc{'w'}(tend,:,yindex,:));
+
+% ... total viscosity
+Akv=squeeze(nc{'AKv'}(tend,:,yindex,:));
+
+
+if isdiag
+    % ---------------------------------------------------------------------
+    % --- read/compute significant wave height ---
+    % --------------------------------------------------------------------
+    % ... wave setup ...  
+    % time-averaged and alongshore <zeta>^2 
+    t0 = 10;
+    sup=squeeze(mean(mean(nc{'zeta'}(t0:end,Jstr:end,:),1),2))'; %  time-averaged
+    z0=sup;
+    z0(h0<Dcrit)=z0(h0<Dcrit)-h0(h0<Dcrit); % add slope
+    
+
+    % ... Hrms ...
+    % time-averaged and alongshore <zeta^2>
+    zz=squeeze(mean(ncd{'zz'}(t0:end,Jstr:end,:),1)); % time-averaged
+
+    zz=squeeze(mean(zz,1)); % average alongshore
+    % see Svendsen (2005) p.126
+    hrms=4.0083*sqrt(zz-z0.^2)/sqrt(2.0011); %max(0,...) ou abs
+    hs=squeeze(sqrt(2.0011)*hrms);
+    hs=squeeze(hs);
+end
+
+%%
+if model3D,
+  ui=squeeze(nch{'u'}(1,N,Jstr:end,:));
+  vi=squeeze(nch{'v'}(1,N,Jstr:end,:));
+  u=squeeze(nch{'u'}(tstr:tend,N,Jstr:end,:));
+  v=squeeze(nch{'v'}(tstr:tend,N,Jstr:end,:));
+  ub=squeeze(nch{'u'}(tstr:tend,1,Jstr:end,:));
+  vb=squeeze(nch{'v'}(tstr:tend,1,Jstr:end,:));
+  ubar=squeeze(nch{'ubar'}(tstr:tend,Jstr:end,:));
+  vbar=squeeze(nch{'vbar'}(tstr:tend,Jstr:end,:));
+  t=squeeze(nch{'tpas01'}(:,N,Jstr:end,:));
+  zeta=squeeze(nch{'zeta'}(:,Jstr:end,:));
+else
+  ui=squeeze(nc{'ubar'}(1,:,:));
+  vi=squeeze(nc{'vbar'}(1,:,:));
+  mu=squeeze(mean(nc{'ubar'}(tstr:tend,:,:)));
+  mv=squeeze(mean(nc{'vbar'}(tstr:tend,:,:)));
+  u=nc{'ubar'}(tstr:tend,:,:);
+  v=nc{'vbar'}(tstr:tend,:,:);
+end
+
+%% Calculating time-averaged alongshore current V at yr=248m
+
+h=pcolor(squeeze(mean(nc{'vbar'}(1:end,1:end,:))));
+set(h,'EdgeColor','none');
+colorbar();
+
+
+Jstr=1;
+Jend=400;
+V=squeeze(nc{'vbar'}(1:end,Jstr:Jend,:));
+V=squeeze(mean(mean(V,1),2));
+Vstd=squeeze(std(mean(nc{'vbar'}(20:end,Jstr:end,:),2),1));
+hold on;
+plot(x(ix150:ix0)',V(ix150:ix0));
+plot(HR16_fig3_Vmod(:,1),HR16_fig3_Vmod(:,2));
+ylim([-0.0,0.3]);
+scatter(HR16_fig3_Vobs(:,1),HR16_fig3_Vobs(:,2),'Marker','*');
+
+%V1=V1(ix150:ix0);
+%x1=x(ix150:ix0);
+%V=squeeze(mean(mean(nc{'v'}(10:end,:,ixyr,:),1),2));
+
+% fname      = strcat(dirpath,'rip_avg_bathy2_ang5.nc');
+% nc=netcdf(fname,'r');
+% xr=squeeze(nc{'x_rho'}(yindex,:));
+% x=xr-(max(xr)-50);
+% h=squeeze(nc{'h'}(yindex,:));
+% [dyr,ixyr] = min(abs(y(:,1)-248));
+% [dyr,ix0] = min(abs(x(1,:)));
+% [dyr,ixb] = min(abs(x(1,:)+181));
+% [dyr,ix150] = min(abs(x(1,:)+150));
+% V2=squeeze(mean(mean(nc{'vbar'}(50:end,:,:),1),2));
+% V2=V2(ix150:ix0);
+% x2=x(ix150:ix0)
+% %V2=squeeze(mean(nc{'vbar'}(20:end,ixyr,:),1));
+% Vi=squeeze(mean(mean(nc{'v'}(100:end,2,ixyr,:),1),3));
+% 
+% estimate = [];
+% for i=1:length(HR16_fig3_Vobs(:,1))
+%     [dyr,indexData] = min(abs(xr(:)-400-HR16_fig3_Vobs(i,1)));
+%     estimate(i) = abs(Vi(indexData));
+% end
+% rmseV = rmse(HR16_fig3_Vobs(:,2),estimate');
+
+%% RMSE: Calculating RMSE between HR16 data points and CROCO simulation
+% For Hs
+if isdiag
+    for i=1:length(HR16_fig3_Hsobs(:,1))
+        [dyr,indexData] = min(abs(x-HR16_fig3_Hsobs(i,1)));
+        estimate(i) = abs(hs(indexData));
+    end
+    rmseHs = rmse(HR16_fig3_Hsobs(:,2),estimate');
+end
+rmseHsHR16=0.03;
+% For V
+estimate = [];
+for i=1:length(HR16_fig3_Vobs(:,1))
+    [dyr,indexData] = min(abs(x-HR16_fig3_Vobs(i,1)));
+    estimate(i) = abs(V(indexData));
+end
+rmseV = rmse(HR16_fig3_Vobs(:,2),estimate');
+rmseHR15 = 0.02;
+
+%% Plotting
+
+% Plotting Hs
+fig=subplot(3,1,1);
+ylim([0,1.0]);
+hold on;
+plot(HR16_fig3_Hsmod(:,1),HR16_fig3_Hsmod(:,2));
+scatter(HR16_fig3_Hsobs(:,1),HR16_fig3_Hsobs(:,2),'Marker','*');
+if isdiag
+    plot(x(ix150:ix0),abs(hs(ix150:ix0)));
+    str={'RMSE = ',rmseHs};
+    legend('funwaveC model RMSE='+string(rmseHsHR16),'observations', ...
+    'CROCO model RMSE='+string(round(rmseHs,3)),'Interpreter', ...
+    'latex','Location','southwest');
+end
+%annotation('textbox',[0.5 0.7 0.1 0.0],'string',str,'EdgeColor','none', ...
+%    'Interpreter','latex');
+ylabel('$H_s$ (m)','Interpreter','latex');
+xlim([-150, 0])
+
+
+% Plotting alongshore drift
+subplot(3,1,2);
+fill([x(ix150:ix0)';flipud(x(ix150:ix0)')],[V(ix150:ix0)-Vstd(ix150:ix0); ...
+    flipud(V(ix150:ix0)+Vstd(ix150:ix0))],[.9 .9 .9],'linestyle','none');
+hold on;
+line(x(ix150:ix0)',V(ix150:ix0));
+plot(HR16_fig3_Vmod(:,1),HR16_fig3_Vmod(:,2));
+ylim([-0.0,0.3]);
+scatter(HR16_fig3_Vobs(:,1),HR16_fig3_Vobs(:,2),'Marker','*');
+ylabel('V ($m.s^{-1}$)','Interpreter','latex');
+str='RMSE='+string(round(rmseV,3));
+strHR16='RMSE='+string(round(rmseHR15,3));
+%annotation('textbox',[0.5 0.7 0.1 0.0],'string',str,'EdgeColor','none', ...
+%    'Interpreter','latex');
+legend('','CROCO '+str,'funwaveC '+strHR16,'observations', ...
+    'Interpreter','latex','Location','best');
+ylabel('V ($m.s^{-1}$)','Interpreter','latex');
+xlim([-150, 0])
+
+% Plotting bathymetry
+load /Users/simon/Desktop/Biblio/Résumés/bathy_HR16_fig3.mat
+subplot(3,1,3);
+plot(x(ix150:ix0),-h(ix150:ix0));
+hold on
+ylabel('$z$ (m)','Interpreter','latex');
+xlabel('$x$ (m)','Interpreter','latex');
+plot(Data001(:,1),Data001(:,2),'.')
+plot(x(ix150:ix0),zeros(length(x(ix150:ix0))),'--r')
+legend('CROCO bathy','HR16 bathy (fig3)', ...
+    'Interpreter','latex','Location','best');
+xlim([-150, 0]);
+ylim([-5.,0.5]);
+
+%%
+figure('Position',[100 100 1000 400]);
+nc=netcdf(fname,'r');
+vbar=squeeze(nc{'vbar'}(:,:,:));
+time=squeeze(nc{'scrum_time'}(:));
+xr=squeeze(nc{'x_rho'}(1,:));
+pos=[30,50,70,100,150];
+evolv=squeeze(mean(vbar(:,:,pos),2));
+plot(time,evolv,'LineWidth',2);
+grid();
+xlabel('Time (s)','Interpreter','latex','FontSize',15);
+ylabel('$\overline{V}$ (m/s)','Interpreter','latex','FontSize',15);
+title('Alongshore-averaged $\overline{V}$ at different cross-shore positions', ...
+    'Interpreter','latex','FontSize',18);
+legend(string(xr(pos)-300)+"m",'Location','best');
