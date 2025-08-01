@@ -1,0 +1,90 @@
+import numpy as np
+import scipy.io
+import re
+from netCDF4 import Dataset
+import os
+
+def swash_to_netcdf2D(source, dir_path, var):
+    filepath = os.path.join(source, dir_path, f"{var}.mat")
+    data = scipy.io.loadmat(filepath)
+
+    if var == 'zeta':
+        swashname = 'Watlev'
+    elif var == 'vort':
+        swashname = 'vort'
+    else:
+        raise ValueError("Only 'zeta' is supported currently.")
+
+    times = []
+    time_map = {}
+
+    # Parse variable names and extract time info
+    for varName in data:
+        match = re.match(rf"{swashname}_([0-9]{{6}})_([0-9]{{3}})$", varName)
+        if match:
+            hhmmss = match.group(1)
+            subsec = match.group(2)
+
+            h = int(hhmmss[0:2])
+            m = int(hhmmss[2:4])
+            s = int(hhmmss[4:6])
+            micro = int(subsec)
+
+            t_seconds = h * 3600 + m * 60 + s + micro / 1000.0
+            times.append(t_seconds)
+            time_map[t_seconds] = varName
+
+    timesSorted = sorted(set(times))
+    time_index = {t: i for i, t in enumerate(timesSorted)}
+
+    # Get dimensions from a valid 2D numeric variable
+    sample_data = None
+    for v in data.values():
+        if isinstance(v, np.ndarray) and v.ndim == 2 and np.issubdtype(v.dtype, np.number):
+            sample_data = v
+            break
+
+    if sample_data is None:
+        raise ValueError("No valid 2D numerical variable found in the .mat file.")
+
+    ySize, xSize = sample_data.shape
+
+    # Initialize output array
+    output_data = np.full((xSize, ySize, len(timesSorted)), np.nan)
+
+    for t, varName in time_map.items():
+        i = time_index[t]
+        try:
+            output_data[:, :, i] = data[varName].T
+        except KeyError:
+            continue
+            
+    if hasattr(data, 'Xp'):
+        Xp=data['Xp'][:]
+    if hasattr(data, 'Botlev'):
+        h=data['Botlev'][:]
+    
+    # Write to NetCDF
+    ncFileName = os.path.join(source, dir_path, f"swash_{var}.nc")
+    with Dataset(ncFileName, 'w', format='NETCDF4') as ncfile:
+        ncfile.createDimension('x', xSize)
+        ncfile.createDimension('y', ySize)
+        ncfile.createDimension('time', len(timesSorted))
+
+        var_nc = ncfile.createVariable(var, 'f8', ('x', 'y', 'time'))
+        x_nc = ncfile.createVariable('Xp', 'f8', ('x','y'))
+        h_nc = ncfile.createVariable('Botlev', 'f8', ('x','y'))
+        time_nc = ncfile.createVariable('time', 'f8', ('time',))
+
+        var_nc[:, :, :] = output_data
+        if hasattr(data, 'Xp'):
+            x_nc[:] = Xp
+        else:
+            x_nc[:] = np.tile(np.linspace(0,xSize,xSize),[1,ySize])
+        if hasattr(data, 'Botlev'):
+            h_nc[:] = h
+        else:
+            h_nc[:] = np.zeros_like(x_nc)
+        time_nc[:] = timesSorted
+
+    print(f"NetCDF file created: {ncFileName}")
