@@ -195,3 +195,6 @@ def find_theta_tseries(zeta,u,v,fs,fmin=0.05,fmax=0.2,N=256):
     theta2b=180/np.pi * np.arctan(b2b/a2b)*0.5
     sigma2b=180/np.pi * np.sqrt(0.5* ( 1 - a2b*np.cos(2*theta2b*np.pi/180) -b2b*np.sin(2*theta2b*np.pi/180)))
     return f,theta2,sigma2,theta2b,sigma2b 
+
+def hyd(p, dm,h0, rho=1000, g=9.81, patm=1): # from funpy Git directory of Emma Shie Nuss
+    return (p-patm)/(rho*g) +dm - h0

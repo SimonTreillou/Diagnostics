@@ -93,16 +93,20 @@ def welch_spectrum_CI(x, fs, nperseg=256, noverlap=None, alpha=0.05):
     return f, Pxx, dof, ci_lower, ci_upper
 
 
-def plot_CIbar_loglog(f,S,ci_upper):
-    x_pos = f[-1] * 0.8  # near top-right, 80% of max freq
-    y_center = max(S) * 0.8  # position around the top of PSD curve
+def plot_CIbar_loglog(f,S,ci_upper,color='k',x_pos=None,y_pos=None,lw=3):
+    if x_pos==None:
+        x_pos = f[-1] * 0.8  # near top-right, 80% of max freq
+    if y_pos==None:
+        y_center = max(S) * 0.8  # position around the top of PSD curve
+    else:
+        y_center=y_pos
     # CI width (half height in log10 units)
     ci_half = ci_upper * S[0]  # same everywhere
 
     # Draw the bar (vertical line)
     plt.vlines(x=x_pos, ymin=y_center - ci_half, ymax=y_center + ci_half,
-               colors='k', linewidth=3)
+               colors=color, linewidth=lw)
 
     # Add small horizontal “caps”
     plt.hlines([y_center - ci_half, y_center + ci_half],
-               x_pos * 0.95, x_pos * 1.05, colors='k', linewidth=2)
+               x_pos * 0.95, x_pos * 1.05, colors=color, linewidth=lw)
