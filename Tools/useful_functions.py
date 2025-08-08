@@ -216,3 +216,27 @@ def smooth(x,L):
     res[0]=res[1]
     res[-1]=res[-2]
     return res
+
+def average_over_timesteps(p, Navg):
+    """
+    Compute the average of a time series over consecutive segments of length Navg.
+    
+    Parameters
+    ----------
+    p : array_like
+        Input time series (1D array).
+    Navg : int
+        Number of timesteps per averaging window.
+    
+    Returns
+    -------
+    pavg : ndarray
+        Averaged time series (length = floor(len(p) / Navg)).
+    """
+    p = np.asarray(p)
+    Np = len(p)
+    Nblocks = Np // Navg  # full blocks only
+
+    # Reshape into blocks and take the mean along axis 1
+    return p[:Nblocks * Navg].reshape(Nblocks, Navg).mean(axis=1)
+

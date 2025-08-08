@@ -198,3 +198,43 @@ def find_theta_tseries(zeta,u,v,fs,fmin=0.05,fmax=0.2,N=256):
 
 def hyd(p, dm,h0, rho=1000, g=9.81, patm=1): # from funpy Git directory of Emma Shie Nuss
     return (p-patm)/(rho*g) +dm - h0
+
+def skewness(zeta):
+    """
+    Compute the skewness of a time series zeta(t)
+
+    Parameters:
+    zeta (array-like): time series data
+
+    Returns:
+    float: skewness of the series
+    """
+    zeta = np.asarray(zeta)
+    mean = np.mean(zeta)
+    std = np.std(zeta)
+    if std == 0:
+        return 0  # or np.nan, depending on how you want to treat constant signals
+    skew = np.mean((zeta - mean)**3) / std**3
+    return skew
+
+def asymmetry(zeta, dt=1.0):
+    """
+    Compute the wave asymmetry of a time series zeta(t),
+    defined using the derivative d(zeta)/dt.
+
+    Parameters:
+    zeta : array-like
+        Time series of sea surface elevation (or similar signal)
+    dt : float
+        Time step between samples (default=1.0)
+
+    Returns:
+    float : asymmetry value
+    """
+    zeta = np.asarray(zeta)
+    dzdt = np.gradient(zeta, dt)
+    numerator = np.mean(dzdt**3)
+    denominator = np.mean(dzdt**2)**1.5
+    if denominator == 0:
+        return 0  # or np.nan
+    return numerator / denominator
