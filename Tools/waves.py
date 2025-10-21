@@ -238,3 +238,22 @@ def asymmetry(zeta, dt=1.0):
     if denominator == 0:
         return 0  # or np.nan
     return numerator / denominator
+
+def compute_cospectrum_quadspectrum(x, z, fs, nperseg=None):
+    """
+    Compute co-spectrum and quad-spectrum between signals x and z.
+
+    Parameters:
+    - x, z: time series arrays
+    - fs: sampling frequency (Hz)
+    - nperseg: length of each segment for Welch method (default: auto)
+
+    Returns:
+    - f: array of frequency bins
+    - Cxz: co-spectrum (real part of cross-spectral density)
+    - Qxz: quad-spectrum (imaginary part of cross-spectral density)
+    """
+    f, Pxy = csd(x, z, fs=fs, nperseg=nperseg)
+    Cxz = np.real(Pxy)
+    Qxz = np.imag(Pxy)
+    return f, Cxz, Qxz

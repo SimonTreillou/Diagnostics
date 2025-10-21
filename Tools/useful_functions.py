@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 from netCDF4 import Dataset
 import datetime
+from scipy.ndimage import gaussian_filter1d
 
 def rho2uvp(rfield):
     Mp, Lp = np.shape(rfield)  # matlab use size for "shape" in python
@@ -239,4 +240,41 @@ def average_over_timesteps(p, Navg):
 
     # Reshape into blocks and take the mean along axis 1
     return p[:Nblocks * Navg].reshape(Nblocks, Navg).mean(axis=1)
+
+
+def extend_bathymetry_in_x(x,h,x_extent,beta,window=100,sigma=20):
+    # Extend x coordinates
+    xplus=np.linspace(x[-1]+1,x[-1]+x_extent,x_extent)
+    X=np.append(x,xplus)
+
+    # Extend bathymetry
+    y0=h[-1]-beta*x[-1]
+    H=np.append(h,beta*xplus+y0)
+    
+    # Smooth transition
+    H=smooth_transition(X, H, center=x[-1], window=window, sigma=sigma)
+    return X,H
+    
+    
+def smooth_transition(x, y, center=500, window=100, sigma=5):
+    """
+    Smooth only around `center` with a smooth blending, avoiding edges.
+    """
+    y_smooth = gaussian_filter1d(y, sigma=sigma)
+
+    # Create smooth weights (0 outside, 1 inside, cosine taper at edges)
+    weights = np.zeros_like(x, dtype=float)
+    dist = np.abs(x - center)
+
+    inside = dist < window/2
+    taper = (dist >= window/2) & (dist < window)
+    
+    weights[inside] = 1.0
+    weights[taper] = 0.5 * (1 + np.cos(np.pi * (dist[taper] - window/2) / (window/2)))
+    # outside stays 0
+
+    # Blend original and smoothed
+    y_out = (1 - weights) * y + weights * y_smooth
+    return y_out
+
 
